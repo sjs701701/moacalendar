@@ -1,9 +1,11 @@
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   NativeSyntheticEvent,
@@ -34,10 +36,32 @@ type SignUpForm = {
   confirmPassword: string;
 };
 
-type ScreenStage = "landing" | "loginForm" | "signupPhone" | "signupForm";
+type AgreementKey = "calendarTerms" | "serviceTerms" | "privacyCollection" | "thirdPartySharing" | "marketing";
+
+type ScreenStage =
+  | "landing"
+  | "loginForm"
+  | "signupPhone"
+  | "signupName"
+  | "signupTerms"
+  | "signupForm";
 
 const loginHero = require("../../assets/auth/login-hero.png");
 const appleIcon = require("../../assets/auth/apple-icon.png");
+const allAgreeCheckOnXml = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="12" cy="12" r="9.25" fill="#7550F5" stroke="#7550F5" stroke-width="1.5"/>
+<path d="M10.0917 15.9996C9.99206 16.004 9.89383 15.9741 9.81279 15.9148L7.14806 13.6684C6.97638 13.5134 6.95053 13.2496 7.08872 13.063C7.24045 12.8886 7.49694 12.8598 7.68219 12.9964L10.0561 14.9702L16.2876 9.09097C16.4719 8.94981 16.7313 8.9755 16.8856 9.15017C17.0398 9.32484 17.0379 9.59074 16.8811 9.76306L10.3944 15.8785C10.3118 15.9558 10.2039 15.999 10.0917 15.9996Z" fill="white" stroke="white" stroke-width="0.5"/>
+</svg>`;
+const allAgreeCheckOffXml = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M10.0917 15.9996C9.99206 16.004 9.89383 15.9741 9.81279 15.9148L7.14806 13.6684C6.97638 13.5134 6.95053 13.2496 7.08872 13.063C7.24045 12.8886 7.49694 12.8598 7.68219 12.9964L10.0561 14.9702L16.2876 9.09097C16.4719 8.94981 16.7313 8.9755 16.8856 9.15017C17.0398 9.32484 17.0379 9.59074 16.8811 9.76306L10.3944 15.8785C10.3118 15.9558 10.2039 15.999 10.0917 15.9996Z" fill="#A6ABB8" stroke="#A6ABB8" stroke-width="0.2"/>
+<circle cx="12" cy="12" r="9.5" stroke="#A6ABB8"/>
+</svg>`;
+const agreementCheckOnXml = `<svg width="19" height="14" viewBox="0 0 19 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M5.94631 13.2346C5.59988 13.2344 5.26421 13.1142 4.99631 12.8946L0.516307 9.22459C-0.0962757 8.69243 -0.174597 7.7696 0.33954 7.14181C0.853678 6.51402 1.77384 6.40892 2.41631 6.90459L5.88631 9.74459L15.8863 0.534592C16.2622 0.0876644 16.8633 -0.100495 17.4269 0.0523425C17.9905 0.20518 18.4142 0.671229 18.5128 1.24682C18.6114 1.82241 18.3669 2.40289 17.8863 2.73459L6.96631 12.8346C6.69 13.0935 6.32496 13.2367 5.94631 13.2346Z" fill="#7550F5"/>
+</svg>`;
+const agreementCheckOffXml = `<svg width="17" height="12" viewBox="0 0 17 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M5.20948 11.5602C5.04155 11.5676 4.87603 11.5183 4.73948 11.4202L0.249483 7.71024C-0.0397957 7.45413 -0.0833516 7.01857 0.149483 6.71024C0.405152 6.4223 0.837337 6.37476 1.14948 6.60024L5.14948 9.86024L15.6495 0.150241C15.96 -0.0828876 16.3971 -0.0404685 16.657 0.248016C16.9169 0.5365 16.9136 0.97565 16.6495 1.26024L5.71948 11.3602C5.58026 11.488 5.39843 11.5593 5.20948 11.5602Z" fill="#A6ABB8"/>
+</svg>`;
 
 const naverIconXml = `<svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g clip-path="url(#clip0_1_40)">
@@ -85,6 +109,38 @@ const initialSignUp: SignUpForm = {
   confirmPassword: "",
 };
 
+const agreementItems: Array<{
+  key: AgreementKey;
+  label: string;
+  required: boolean;
+}> = [
+  {
+    key: "calendarTerms",
+    label: "(필수) 모아캘린더 약관 및 동의사항",
+    required: true,
+  },
+  {
+    key: "serviceTerms",
+    label: "(필수) 서비스 이용약관",
+    required: true,
+  },
+  {
+    key: "privacyCollection",
+    label: "(필수) 개인정보 수집 및 이용",
+    required: true,
+  },
+  {
+    key: "thirdPartySharing",
+    label: "(필수) 개인정보 제3자 제공 동의",
+    required: true,
+  },
+  {
+    key: "marketing",
+    label: "(선택) 마케팅 정보 수신 동의",
+    required: false,
+  },
+];
+
 export function AuthScreen() {
   const [stage, setStage] = useState<ScreenStage>("landing");
   const [mode, setMode] = useState<AuthMode>("login");
@@ -93,8 +149,21 @@ export function AuthScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationRequested, setVerificationRequested] = useState(false);
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const [agreements, setAgreements] = useState<Record<AgreementKey, boolean>>({
+    calendarTerms: false,
+    serviceTerms: false,
+    privacyCollection: false,
+    thirdPartySharing: false,
+    marketing: false,
+  });
+  const [focusedVerificationIndex, setFocusedVerificationIndex] = useState<number | null>(null);
   const [errors, setErrors] = useState<AuthErrors>({});
   const [submitted, setSubmitted] = useState("");
+  const phoneInputRef = useRef<TextInput | null>(null);
+  const nameInputRef = useRef<TextInput | null>(null);
+  const verificationInputRefs = useRef<Array<TextInput | null>>([]);
 
   const headerCopy =
     mode === "login"
@@ -149,6 +218,87 @@ export function AuthScreen() {
     } else {
       setSubmitted("");
     }
+  };
+
+  const dismissSignupInputs = () => {
+    phoneInputRef.current?.blur();
+    nameInputRef.current?.blur();
+    verificationInputRefs.current.forEach((input) => input?.blur());
+    setPhoneFocused(false);
+    setNameFocused(false);
+    setFocusedVerificationIndex(null);
+    Keyboard.dismiss();
+  };
+
+  const allAgreementsSelected = agreementItems.every((item) => agreements[item.key]);
+  const requiredAgreementsSelected = agreementItems
+    .filter((item) => item.required)
+    .every((item) => agreements[item.key]);
+
+  const toggleAllAgreements = () => {
+    const nextValue = !allAgreementsSelected;
+    setAgreements({
+      calendarTerms: nextValue,
+      serviceTerms: nextValue,
+      privacyCollection: nextValue,
+      thirdPartySharing: nextValue,
+      marketing: nextValue,
+    });
+  };
+
+  const toggleAgreement = (key: AgreementKey) => {
+    setAgreements((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  };
+
+  const openAgreementDetail = (label: string) => {
+    dismissSignupInputs();
+    Alert.alert(label, "약관 내용이 노출될 예정입니다.");
+  };
+
+  const showWarning = (message: string) => {
+    dismissSignupInputs();
+    Alert.alert("알림", message);
+  };
+
+  const handleVerificationNext = () => {
+    const joinedVerificationCode = verificationCode.join("");
+
+    if (!verificationRequested || joinedVerificationCode.length !== verificationCode.length) {
+      showWarning("인증번호를 입력해주세요.");
+      return;
+    }
+
+    if (joinedVerificationCode !== "000000") {
+      showWarning("인증번호가 일치하지 않습니다.");
+      return;
+    }
+
+    dismissSignupInputs();
+    setStage("signupName");
+  };
+
+  const handleSignupNameNext = () => {
+    if (!signUpForm.name.trim()) {
+      showWarning("이름을 입력해주세요.");
+      return;
+    }
+
+    dismissSignupInputs();
+    setStage("signupTerms");
+  };
+
+  const handleSignupTermsNext = () => {
+    if (!requiredAgreementsSelected) {
+      showWarning("필수 약관에 동의해주세요.");
+      return;
+    }
+
+    dismissSignupInputs();
+    setMode("signup");
+    setStage("signupForm");
   };
 
   const updateVerificationDigit = (index: number, value: string) => {
@@ -244,81 +394,297 @@ export function AuthScreen() {
           style={signupStyles.keyboard}
         >
           <View style={signupStyles.container}>
-            <View style={signupStyles.header}>
-              <Pressable onPress={() => setStage("landing")} style={signupStyles.backButton}>
-                <Text style={signupStyles.backArrow}>‹</Text>
+            <Pressable onPress={dismissSignupInputs} style={signupStyles.dismissLayer} />
+            <View pointerEvents="box-none" style={signupStyles.contentLayer}>
+              <View style={signupStyles.header}>
+                <Pressable
+                  onPress={() => {
+                    dismissSignupInputs();
+                    setStage("landing");
+                  }}
+                  style={signupStyles.backButton}
+                >
+                  <Text style={signupStyles.backArrow}>‹</Text>
+                </Pressable>
+              </View>
+
+              <View style={signupStyles.centerContent}>
+                <View style={signupStyles.copyBlock}>
+                  <Text style={signupStyles.title}>휴대폰 번호로 가입해주세요.</Text>
+                  <Text style={signupStyles.description}>
+                    입력한 휴대폰 번호로 로그인 할 수 있습니다.
+                  </Text>
+                </View>
+
+                <View style={signupStyles.progressRow}>
+                  <View style={[signupStyles.progressBar, signupStyles.progressBarActive]} />
+                  <View style={signupStyles.progressBar} />
+                  <View style={signupStyles.progressBar} />
+                </View>
+
+                <View style={signupStyles.fieldGroup}>
+                  <TextInput
+                    keyboardType="number-pad"
+                    maxLength={11}
+                    onBlur={() => setPhoneFocused(false)}
+                    onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
+                    onFocus={() => {
+                      verificationInputRefs.current.forEach((input) => input?.blur());
+                      setPhoneFocused(true);
+                      setFocusedVerificationIndex(null);
+                    }}
+                    placeholder={
+                      phoneFocused && !phoneNumber ? "" : "휴대폰 번호 (-없이 숫자만 입력)"
+                    }
+                    placeholderTextColor="#A6ABB8"
+                    ref={phoneInputRef}
+                    style={signupStyles.phoneInput}
+                    textAlign="center"
+                    value={phoneNumber}
+                  />
+
+                  <Pressable
+                    onPress={() => {
+                      dismissSignupInputs();
+                      setVerificationRequested(true);
+                    }}
+                    style={signupStyles.outlineButton}
+                  >
+                    <Text style={signupStyles.outlineButtonText}>인증문자 받기</Text>
+                  </Pressable>
+
+                  {verificationRequested ? (
+                    <View style={signupStyles.verificationRow}>
+                      {verificationCode.map((digit, index) => (
+                        <TextInput
+                          key={`verification-${index}`}
+                          keyboardType="number-pad"
+                          maxLength={1}
+                          onBlur={() =>
+                            setFocusedVerificationIndex((current) =>
+                              current === index ? null : current,
+                            )
+                          }
+                          onChangeText={(value) => updateVerificationDigit(index, value)}
+                          onFocus={() => {
+                            phoneInputRef.current?.blur();
+                            setPhoneFocused(false);
+                            setFocusedVerificationIndex(index);
+                          }}
+                          onKeyPress={(event) => clearVerificationDigit(index, event)}
+                          placeholder={focusedVerificationIndex === index && !digit ? "" : "0"}
+                          placeholderTextColor="#A6ABB8"
+                          ref={(input) => {
+                            verificationInputRefs.current[index] = input;
+                          }}
+                          style={signupStyles.verificationInput}
+                          textAlign="center"
+                          value={digit}
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              <Pressable
+                onPress={handleVerificationNext}
+              >
+                <LinearGradient
+                  colors={["#6C4CF4", "#7C54F6"]}
+                  end={{ x: 1, y: 0.5 }}
+                  start={{ x: 0, y: 0.5 }}
+                  style={signupStyles.nextButton}
+                >
+                  <Text style={signupStyles.nextButtonText}>다음</Text>
+                </LinearGradient>
               </Pressable>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
-            <View style={signupStyles.centerContent}>
-              <View style={signupStyles.copyBlock}>
-                <Text style={signupStyles.title}>휴대폰 번호로 가입해주세요.</Text>
-                <Text style={signupStyles.description}>
-                  입력한 휴대폰 번호로 로그인 할 수 있습니다.
-                </Text>
-              </View>
-
-              <View style={signupStyles.progressRow}>
-                <View style={[signupStyles.progressBar, signupStyles.progressBarActive]} />
-                <View style={signupStyles.progressBar} />
-                <View style={signupStyles.progressBar} />
-              </View>
-
-              <View style={signupStyles.fieldGroup}>
-                <TextInput
-                  keyboardType="number-pad"
-                  maxLength={11}
-                  onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
-                  placeholder="휴대폰 번호 (-없이 숫자만 입력)"
-                  placeholderTextColor="#A6ABB8"
-                  style={signupStyles.phoneInput}
-                  textAlign="center"
-                  value={phoneNumber}
-                />
-
+  if (stage === "signupName") {
+    return (
+      <SafeAreaView edges={["top", "bottom", "left", "right"]} style={signupStyles.safeArea}>
+        <StatusBar style="dark" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={signupStyles.keyboard}
+        >
+          <View style={signupStyles.container}>
+            <Pressable onPress={dismissSignupInputs} style={signupStyles.dismissLayer} />
+            <View pointerEvents="box-none" style={signupStyles.contentLayer}>
+              <View style={signupStyles.header}>
                 <Pressable
-                  onPress={() => setVerificationRequested(true)}
-                  style={signupStyles.outlineButton}
+                  onPress={() => {
+                    dismissSignupInputs();
+                    setStage("signupPhone");
+                  }}
+                  style={signupStyles.backButton}
                 >
-                  <Text style={signupStyles.outlineButtonText}>인증문자 받기</Text>
+                  <Text style={signupStyles.backArrow}>‹</Text>
                 </Pressable>
-
-                {verificationRequested ? (
-                  <View style={signupStyles.verificationRow}>
-                    {verificationCode.map((digit, index) => (
-                      <TextInput
-                        key={`verification-${index}`}
-                        keyboardType="number-pad"
-                        maxLength={1}
-                        onChangeText={(value) => updateVerificationDigit(index, value)}
-                        onKeyPress={(event) => clearVerificationDigit(index, event)}
-                        placeholder="0"
-                        placeholderTextColor="#A6ABB8"
-                        style={signupStyles.verificationInput}
-                        textAlign="center"
-                        value={digit}
-                      />
-                    ))}
-                  </View>
-                ) : null}
               </View>
-            </View>
 
-            <Pressable
-              onPress={() => {
-                setMode("signup");
-                setStage("signupForm");
-              }}
-            >
-              <LinearGradient
-                colors={["#6C4CF4", "#7C54F6"]}
-                end={{ x: 1, y: 0.5 }}
-                start={{ x: 0, y: 0.5 }}
-                style={signupStyles.nextButton}
-              >
-                <Text style={signupStyles.nextButtonText}>다음</Text>
-              </LinearGradient>
-            </Pressable>
+              <View style={signupStyles.centerContent}>
+                <View style={signupStyles.copyBlock}>
+                  <Text style={signupStyles.title}>이름을 입력해주세요.</Text>
+                  <Text style={signupStyles.description}>본명을 입력해 주세요.</Text>
+                </View>
+
+                <View style={signupStyles.progressRow}>
+                  <View style={signupStyles.progressBar} />
+                  <View style={[signupStyles.progressBar, signupStyles.progressBarActive]} />
+                  <View style={signupStyles.progressBar} />
+                </View>
+
+                <View style={signupStyles.fieldGroup}>
+                  <TextInput
+                    autoCapitalize="words"
+                    onBlur={() => setNameFocused(false)}
+                    onChangeText={(name) =>
+                      setSignUpForm((current) => ({
+                        ...current,
+                        name,
+                      }))
+                    }
+                    onFocus={() => setNameFocused(true)}
+                    placeholder={nameFocused && !signUpForm.name ? "" : "이름 입력"}
+                    placeholderTextColor="#A6ABB8"
+                    ref={nameInputRef}
+                    style={signupStyles.phoneInput}
+                    textAlign="center"
+                    value={signUpForm.name}
+                  />
+                </View>
+              </View>
+
+              <Pressable onPress={handleSignupNameNext}>
+                <LinearGradient
+                  colors={["#6C4CF4", "#7C54F6"]}
+                  end={{ x: 1, y: 0.5 }}
+                  start={{ x: 0, y: 0.5 }}
+                  style={signupStyles.nextButton}
+                >
+                  <Text style={signupStyles.nextButtonText}>다음</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  if (stage === "signupTerms") {
+    return (
+      <SafeAreaView edges={["top", "bottom", "left", "right"]} style={signupStyles.safeArea}>
+        <StatusBar style="dark" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={signupStyles.keyboard}
+        >
+          <View style={signupStyles.container}>
+            <Pressable onPress={dismissSignupInputs} style={signupStyles.dismissLayer} />
+            <View pointerEvents="box-none" style={signupStyles.contentLayer}>
+              <View style={signupStyles.header}>
+                <Pressable
+                  onPress={() => {
+                    dismissSignupInputs();
+                    setStage("signupName");
+                  }}
+                  style={signupStyles.backButton}
+                >
+                  <Text style={signupStyles.backArrow}>‹</Text>
+                </Pressable>
+              </View>
+
+              <View style={signupStyles.centerContent}>
+                <View style={signupStyles.termsCopyBlock}>
+                  <Text style={signupStyles.termsTitle}>마지막 단계에요.</Text>
+                  <Text style={signupStyles.termsTitle}>약관 확인 후 동의 해주세요.</Text>
+                </View>
+
+                <View style={signupStyles.progressRow}>
+                  <View style={signupStyles.progressBar} />
+                  <View style={signupStyles.progressBar} />
+                  <View style={[signupStyles.progressBar, signupStyles.progressBarActive]} />
+                </View>
+
+                <View style={signupStyles.termsSection}>
+                  <Pressable onPress={toggleAllAgreements} style={signupStyles.allAgreeCard}>
+                    <View style={signupStyles.allAgreeIconWrap}>
+                      <SvgXml
+                        height={24}
+                        width={24}
+                        xml={allAgreementsSelected ? allAgreeCheckOnXml : allAgreeCheckOffXml}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        signupStyles.allAgreeText,
+                        allAgreementsSelected && signupStyles.allAgreeTextActive,
+                      ]}
+                    >
+                      전체 동의하기
+                    </Text>
+                  </Pressable>
+
+                  <View style={signupStyles.termsDivider} />
+
+                  <View style={signupStyles.agreementList}>
+                    {agreementItems.map((item) => {
+                      const checked = agreements[item.key];
+
+                      return (
+                        <View key={item.key} style={signupStyles.agreementItem}>
+                          <Pressable
+                            onPress={() => toggleAgreement(item.key)}
+                            style={signupStyles.agreementIconButton}
+                          >
+                            <SvgXml
+                              height={checked ? 14 : 12}
+                              width={checked ? 19 : 17}
+                              xml={checked ? agreementCheckOnXml : agreementCheckOffXml}
+                            />
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() => openAgreementDetail(item.label)}
+                            style={signupStyles.agreementLabelButton}
+                          >
+                            <Text
+                              style={[
+                                signupStyles.agreementLabel,
+                                checked
+                                  ? signupStyles.agreementLabelChecked
+                                  : signupStyles.agreementLabelMuted,
+                              ]}
+                            >
+                              {item.label}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
+              <Pressable onPress={handleSignupTermsNext}>
+                <LinearGradient
+                  colors={["#6C4CF4", "#7C54F6"]}
+                  end={{ x: 1, y: 0.5 }}
+                  start={{ x: 0, y: 0.5 }}
+                  style={signupStyles.nextButton}
+                >
+                  <Text style={signupStyles.nextButtonText}>다음</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -346,7 +712,7 @@ export function AuthScreen() {
           >
             <View style={formStyles.heroPanel}>
               <Pressable
-                onPress={() => setStage(mode === "signup" ? "signupPhone" : "landing")}
+                onPress={() => setStage(mode === "signup" ? "signupTerms" : "landing")}
                 style={formStyles.backLink}
               >
                 <Text style={formStyles.backLinkText}>이전</Text>
@@ -537,6 +903,12 @@ const signupStyles = StyleSheet.create({
     paddingBottom: 60,
     paddingHorizontal: 45,
   },
+  dismissLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  contentLayer: {
+    flex: 1,
+  },
   header: {
     alignItems: "flex-start",
     height: 60,
@@ -566,6 +938,10 @@ const signupStyles = StyleSheet.create({
     alignItems: "center",
     gap: 15,
   },
+  termsCopyBlock: {
+    alignItems: "center",
+    gap: 2,
+  },
   title: {
     color: "#222222",
     fontSize: 22,
@@ -578,6 +954,14 @@ const signupStyles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: -0.32,
     lineHeight: 20,
+  },
+  termsTitle: {
+    color: "#222222",
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.44,
+    lineHeight: 29,
+    textAlign: "center",
   },
   progressRow: {
     flexDirection: "row",
@@ -595,6 +979,78 @@ const signupStyles = StyleSheet.create({
   fieldGroup: {
     gap: 20,
     width: "100%",
+  },
+  termsSection: {
+    gap: 20,
+    width: "100%",
+  },
+  allAgreeCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(34,34,34,0.1)",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    height: 60,
+    maxWidth: 340,
+    paddingHorizontal: 15,
+    width: "100%",
+  },
+  allAgreeIconWrap: {
+    alignItems: "center",
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+  allAgreeText: {
+    color: "#A6ABB8",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.28,
+  },
+  allAgreeTextActive: {
+    color: "#7550F5",
+  },
+  termsDivider: {
+    backgroundColor: "rgba(34,34,34,0.08)",
+    height: 1,
+    width: "100%",
+  },
+  agreementList: {
+    gap: 10,
+  },
+  agreementItem: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    flexDirection: "row",
+    gap: 10,
+    height: 50,
+    maxWidth: 340,
+    paddingHorizontal: 15,
+    width: "100%",
+  },
+  agreementIconButton: {
+    alignItems: "center",
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+  agreementLabelButton: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  agreementLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    letterSpacing: -0.28,
+  },
+  agreementLabelChecked: {
+    color: "#222222",
+  },
+  agreementLabelMuted: {
+    color: "#A6ABB8",
   },
   phoneInput: {
     backgroundColor: "#FFFFFF",

@@ -50,7 +50,7 @@ export function AuthInput({
           onBlur={() => setFocused(false)}
           onChangeText={onChangeText}
           onFocus={() => setFocused(true)}
-          placeholder={placeholder}
+          placeholder={focused && !value ? "" : placeholder}
           placeholderTextColor={colors.inkSoft}
           secureTextEntry={secureTextEntry}
           style={styles.input}
